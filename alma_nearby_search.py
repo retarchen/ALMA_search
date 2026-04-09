@@ -51,35 +51,115 @@ ALMA_TAP_URL = "https://almascience.eso.org/tap"
 DEFAULT_RADIUS_ARCMIN = 5.0
 DEFAULT_LINE_TOLERANCE_KMS = 350.0
 ARRAY_ORDER = ("12m", "7m", "TP")
+DEFAULT_OBSERVED_SPECIES = "CO"
+INTERNAL_OBSERVED_COLUMN = "observed_species_in_alma_flag"
 
 LINE_CATALOG_GHZ: dict[str, float] = {
-    "12CO(1-0)": 115.2712018,
-    "13CO(1-0)": 110.2013543,
-    "C18O(1-0)": 109.7821734,
-    "C17O(1-0)": 112.3589880,
-    "CN(1-0)": 113.4909700,
-    "CCH(1-0)": 87.3168980,
-    "HCN(1-0)": 88.6318470,
-    "HCO+(1-0)": 89.1885250,
-    "HNC(1-0)": 90.6635680,
-    "N2H+(1-0)": 93.1737000,
-    "CS(2-1)": 97.9809530,
-    "12CO(2-1)": 230.5380000,
-    "13CO(2-1)": 220.3986842,
-    "C18O(2-1)": 219.5603541,
-    "C17O(2-1)": 224.7141990,
-    "CN(2-1)": 226.8740000,
-    "H2CO(3_03-2_02)": 218.2221920,
-    "H2CO(3_22-2_21)": 218.4756320,
-    "H2CO(3_21-2_20)": 218.7600660,
-    "CH3OH(5_0-4_0)": 241.7914310,
-    "CS(5-4)": 244.9355565,
-    "12CO(3-2)": 345.7959899,
-    "13CO(3-2)": 330.5879653,
-    "C18O(3-2)": 329.3305525,
+# =======================
+# CO ladder (CRITICAL)
+# =======================
+"12CO(1-0)": 115.2712018,
+"12CO(2-1)": 230.5380000,
+"12CO(3-2)": 345.7959899,
+"12CO(4-3)": 461.0407682,
+"12CO(6-5)": 691.4730763,
+"12CO(7-6)": 806.6518060,
+
+"13CO(1-0)": 110.2013543,
+"13CO(2-1)": 220.3986842,
+"13CO(3-2)": 330.5879653,
+"13CO(4-3)": 440.7651668,
+
+"C18O(1-0)": 109.7821734,
+"C18O(2-1)": 219.5603541,
+"C18O(3-2)": 329.3305525,
+"C18O(4-3)": 439.0887658,
+
+"C17O(1-0)": 112.3589880,
+"C17O(2-1)": 224.7141990,
+"C17O(3-2)": 337.0611040,
+
+# =======================
+# Dense gas tracers
+# =======================
+"HCN(1-0)": 88.6318470,
+"HCN(3-2)": 265.8864340,
+"HCN(4-3)": 354.5054770,
+
+"HCO+(1-0)": 89.1885250,
+"HCO+(3-2)": 267.5576250,
+"HCO+(4-3)": 356.7342880,
+
+"HNC(1-0)": 90.6635680,
+"HNC(3-2)": 271.9811420,
+"HNC(4-3)": 362.6303030,
+
+"N2H+(1-0)": 93.1737000,
+"N2H+(3-2)": 279.5118620,
+
+"CS(2-1)": 97.9809530,
+"CS(3-2)": 146.9690290,
+"CS(5-4)": 244.9355565,
+"CS(7-6)": 342.8828500,
+
+# =======================
+# Diffuse / PDR tracers
+# =======================
+# These CN and CCH entries are effective group centers for hyperfine complexes,
+# used here as practical spectral-coverage proxies rather than unique components.
+"CN(1-0)": 113.4909700,
+"CN(2-1)": 226.8740000,
+
+"CCH(1-0)": 87.3168980,
+"CCH(3-2)": 262.0042600,
+
+# =======================
+# Carbon / key transition lines
+# =======================
+"[CI](1-0)": 492.1606510,
+"[CI](2-1)": 809.3419700,
+
+# =======================
+# Shock tracers
+# =======================
+"SiO(2-1)": 86.8469600,
+"SiO(5-4)": 217.1049800,
+"SiO(8-7)": 347.3306310,
+
+"SO(5_6-4_5)": 219.9494420,
+"SO(6_5-5_4)": 251.8257700,
+
+"SO2(11_1,11-10_0,10)": 221.9652200,
+
+# =======================
+# Chemistry / cold gas
+# =======================
+"H2CO(3_03-2_02)": 218.2221920,
+"H2CO(3_22-2_21)": 218.4756320,
+"H2CO(3_21-2_20)": 218.7600660,
+
+"H2CO(2_12-1_11)": 140.8395020,
+
+"NH2D(1_11-1_01)": 85.9262630,
+
+# =======================
+# Complex / star-forming tracers (limited)
+# =======================
+"CH3OH(5_0-4_0)": 241.7914310,
+# Group center for the 2_k-1_k methanol complex near 96.741 GHz.
+"CH3OH(2_k-1_k)": 96.7413750,
+
+"CH3CN(12_0-11_0)": 220.7472610,
+
+# =======================
+# Recombination lines (few key ones)
+# =======================
+"H30alpha": 231.9009280,
+"H40alpha": 99.0229500,
+
 }
 
-OUTPUT_COLUMNS = [
+INTERNAL_OUTPUT_COLUMNS = [
     "Name",
     "ra",
     "dec",
@@ -96,7 +176,7 @@ OUTPUT_COLUMNS = [
     "velocity_resolution_kms",
     "sensitivity_10kms_mjy_beam",
     "proposal_title",
-    "Observed CO in ALMA?",
+    INTERNAL_OBSERVED_COLUMN,
 ]
 
 
@@ -216,6 +296,25 @@ def format_float_text(value: Any, digits: int = 3) -> str:
     return f"{number:.{digits}f}".rstrip("0").rstrip(".")
 
 
+def normalize_observed_species_label(species: Any) -> str:
+    """Normalize the user-facing observed-species label."""
+    text = normalize_whitespace(species)
+    return text if text else DEFAULT_OBSERVED_SPECIES
+
+
+def observed_species_column_name(species: Any) -> str:
+    """Return the output column label for the observed-species flag."""
+    return f"Observed {normalize_observed_species_label(species)} in ALMA?"
+
+
+def get_output_columns(species: Any) -> list[str]:
+    """Return the public output-column order for the selected observed species."""
+    return [
+        observed_species_column_name(species) if column == INTERNAL_OBSERVED_COLUMN else column
+        for column in INTERNAL_OUTPUT_COLUMNS
+    ]
+
+
 def combine_scalar_values(values: Sequence[Any], digits: int = 3) -> str | pd.NA:
     """Combine scalar values into a unique comma-separated string."""
     formatted = unique_preserve_order(
@@ -228,16 +327,49 @@ def combine_scalar_values(values: Sequence[Any], digits: int = 3) -> str | pd.NA
     return ",".join(formatted)
 
 
-def has_co_line(target_lines: Any) -> bool:
-    """Return True when the inferred target lines include any CO transition."""
+def extract_line_species_token(line_name: str) -> str:
+    """Extract the species token from a line label like 'HCN(1-0)'."""
+    return line_name.split("(", 1)[0].strip()
+
+
+def normalize_species_token(token: str) -> str:
+    """Normalize a species token for exact comparison."""
+    return re.sub(r"[\s\[\]]+", "", token).upper()
+
+
+def line_matches_observed_species(line_name: str, observed_species: Any) -> bool:
+    """Return True when a line label matches the selected observed-species query."""
+    line_token = extract_line_species_token(line_name)
+    query_token = extract_line_species_token(normalize_observed_species_label(observed_species))
+    normalized_line = normalize_species_token(line_token)
+    normalized_query = normalize_species_token(query_token)
+
+    if normalized_query == "CO":
+        return normalized_line in {"CO", "12CO", "13CO", "C18O", "C17O"}
+
+    return normalized_line == normalized_query
+
+
+def has_observed_species_line(target_lines: Any, observed_species: Any) -> bool:
+    """Return True when inferred target lines include the selected observed species."""
     if is_blank(target_lines):
         return False
-    return "CO(" in str(target_lines)
+
+    return any(
+        line_matches_observed_species(line_name=piece.strip(), observed_species=observed_species)
+        for piece in str(target_lines).split(",")
+        if piece.strip()
+    )
 
 
-def compute_observed_co_flag(target_lines: Any, distance_arcsec: Any, fov_arcsec: Any) -> float:
-    """Compute the user-facing CO observation flag."""
-    if not has_co_line(target_lines):
+def compute_observed_species_flag(
+    target_lines: Any,
+    distance_arcsec: Any,
+    fov_arcsec: Any,
+    observed_species: Any,
+) -> float:
+    """Compute the user-facing observed-species flag."""
+    if not has_observed_species_line(target_lines, observed_species):
         return 0.0
 
     try:
@@ -278,7 +410,7 @@ def build_no_match_row(input_name: str, input_ra_deg: float, input_dec_deg: floa
         "velocity_resolution_kms": pd.NA,
         "sensitivity_10kms_mjy_beam": pd.NA,
         "proposal_title": pd.NA,
-        "Observed CO in ALMA?": 0.0,
+        INTERNAL_OBSERVED_COLUMN: 0.0,
     }
 
 
@@ -595,7 +727,7 @@ def blank_string_to_na(value: Any) -> Any:
     return value
 
 
-def finalize_results(df: pd.DataFrame) -> pd.DataFrame:
+def finalize_results(df: pd.DataFrame, observed_species: Any) -> pd.DataFrame:
     """Apply final normalization and derived columns before CSV export."""
     if df.empty:
         return df.copy()
@@ -616,22 +748,65 @@ def finalize_results(df: pd.DataFrame) -> pd.DataFrame:
     ):
         output[field] = output[field].map(blank_string_to_na)
 
-    output["Observed CO in ALMA?"] = output.apply(
-        lambda row: compute_observed_co_flag(
+    output[INTERNAL_OBSERVED_COLUMN] = output.apply(
+        lambda row: compute_observed_species_flag(
             target_lines=row.get("target_lines"),
             distance_arcsec=row.get("distance_arcsec"),
             fov_arcsec=row.get("fov_arcsec"),
+            observed_species=observed_species,
         ),
         axis=1,
     )
-    output["Observed CO in ALMA?"] = output.groupby("Name", dropna=False)["Observed CO in ALMA?"].transform("max")
+    output[INTERNAL_OBSERVED_COLUMN] = output.groupby("Name", dropna=False)[INTERNAL_OBSERVED_COLUMN].transform("max")
     return output
 
 
-def deduplicate_results(df: pd.DataFrame, dedup_level: str) -> pd.DataFrame:
+def select_cleaner_rows(
+    df: pd.DataFrame,
+    observed_species: Any,
+    max_observed_rows_per_name: int,
+) -> pd.DataFrame:
+    """
+    Reduce the final table to a cleaner subset.
+
+    Rules:
+    - keep one unmatched row when a source has no ALMA match
+    - keep up to ``max_observed_rows_per_name`` closest rows when the selected observed species exists
+    - otherwise keep the single closest row for that source
+    """
+    if df.empty:
+        return df.copy()
+
+    ordered = df.copy()
+    ordered["_distance_sort"] = pd.to_numeric(ordered["distance_arcsec"], errors="coerce")
+    ordered = ordered.sort_values(["Name", "_distance_sort"], kind="stable", na_position="last")
+
+    selected_groups: list[pd.DataFrame] = []
+    for _, group in ordered.groupby("Name", sort=False, dropna=False):
+        unmatched = group[group["project_code"].isna()]
+        if not unmatched.empty:
+            selected_groups.append(unmatched.head(1))
+            continue
+
+        species_rows = group[
+            group["target_lines"].fillna("").map(
+                lambda value: has_observed_species_line(value, observed_species)
+            )
+        ]
+        if not species_rows.empty:
+            selected_groups.append(species_rows.head(max_observed_rows_per_name))
+        else:
+            selected_groups.append(group.head(1))
+
+    cleaned = pd.concat(selected_groups, ignore_index=True)
+    cleaned = cleaned.sort_values(["Name", "_distance_sort"], kind="stable", na_position="last")
+    return cleaned.drop(columns=["_distance_sort"])
+
+
+def deduplicate_results(df: pd.DataFrame, dedup_level: str, observed_species: Any) -> pd.DataFrame:
     """Deduplicate result rows according to the requested grouping level."""
     if df.empty or dedup_level == "none":
-        return finalize_results(df)
+        return finalize_results(df, observed_species=observed_species)
 
     group_keys = ["Name", "ra", "dec", "project_code"]
     if dedup_level == "project_target":
@@ -667,17 +842,21 @@ def deduplicate_results(df: pd.DataFrame, dedup_level: str) -> pd.DataFrame:
 
         grouped_rows.append(best)
 
-    return finalize_results(pd.DataFrame(grouped_rows, columns=OUTPUT_COLUMNS))
+    return finalize_results(
+        pd.DataFrame(grouped_rows, columns=INTERNAL_OUTPUT_COLUMNS),
+        observed_species=observed_species,
+    )
 
 
-def write_csv(df: pd.DataFrame, path: str) -> None:
+def write_csv(df: pd.DataFrame, path: str, observed_species: Any) -> None:
     """Write results to CSV with the canonical column order."""
     output = df.copy()
-    for column in OUTPUT_COLUMNS:
+    for column in INTERNAL_OUTPUT_COLUMNS:
         if column not in output.columns:
             output[column] = pd.NA
 
-    output = output.loc[:, OUTPUT_COLUMNS]
+    output = output.loc[:, INTERNAL_OUTPUT_COLUMNS]
+    output = output.rename(columns={INTERNAL_OBSERVED_COLUMN: observed_species_column_name(observed_species)})
     output["_distance_sort"] = pd.to_numeric(output["distance_arcsec"], errors="coerce")
     output = output.sort_values(by=["Name", "_distance_sort"], ascending=[True, True], kind="stable", na_position="last")
     output = output.drop(columns=["_distance_sort"])
@@ -751,7 +930,7 @@ def rows_from_query_results(
                 ),
                 "sensitivity_10kms_mjy_beam": to_optional_float(safe_get(row, "sensitivity_10kms", "")),
                 "proposal_title": normalize_whitespace(safe_get(row, "obs_title", "")),
-                "Observed CO in ALMA?": pd.NA,
+                INTERNAL_OBSERVED_COLUMN: pd.NA,
             }
         )
 
@@ -788,6 +967,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--observed-species",
+        default=DEFAULT_OBSERVED_SPECIES,
+        help=f"Species used for the final observed-in-ALMA flag and cleaner selection. Default: {DEFAULT_OBSERVED_SPECIES}",
+    )
+    parser.add_argument(
+        "--cleaner",
+        action="store_true",
+        help="Write a reduced output table: keep unmatched rows, up to N closest rows for the selected observed species per source, otherwise one closest row",
+    )
+    parser.add_argument(
+        "--cleaner-max-observed-rows-per-name",
+        "--cleaner-max-co-rows-per-name",
+        dest="cleaner_max_observed_rows_per_name",
+        type=int,
+        default=5,
+        help="Maximum number of closest rows to keep per source for the selected observed species when --cleaner is used. Default: 5",
+    )
     return parser.parse_args(argv)
 
 
@@ -801,6 +998,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if args.line_velocity_tolerance_kms < 0:
         LOGGER.error("--line-velocity-tolerance-kms must be non-negative")
+        return 1
+    if args.cleaner_max_observed_rows_per_name <= 0:
+        LOGGER.error("--cleaner-max-observed-rows-per-name must be positive")
         return 1
 
     try:
@@ -866,13 +1066,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
     if all_rows:
-        raw_df = pd.DataFrame(all_rows, columns=OUTPUT_COLUMNS)
-        result_df = deduplicate_results(raw_df, args.dedup_level)
+        raw_df = pd.DataFrame(all_rows, columns=INTERNAL_OUTPUT_COLUMNS)
+        result_df = deduplicate_results(
+            raw_df,
+            args.dedup_level,
+            observed_species=args.observed_species,
+        )
     else:
-        result_df = pd.DataFrame(columns=OUTPUT_COLUMNS)
+        result_df = pd.DataFrame(columns=INTERNAL_OUTPUT_COLUMNS)
+
+    if args.cleaner:
+        result_df = select_cleaner_rows(
+            result_df,
+            observed_species=args.observed_species,
+            max_observed_rows_per_name=int(args.cleaner_max_observed_rows_per_name),
+        )
 
     try:
-        write_csv(result_df, args.output_csv)
+        write_csv(result_df, args.output_csv, observed_species=args.observed_species)
     except Exception as exc:
         LOGGER.error("Failed to write output CSV: %s", exc)
         return 1

@@ -57,6 +57,7 @@ python alma_nearby_search.py input.csv output.csv
 - Search radius: `5` arcmin
 - Deduplication level: `project_target`
 - Line velocity tolerance: `350 km/s`
+- Observed-species flag: `CO`
 
 You can override them, for example:
 
@@ -70,6 +71,14 @@ python alma_nearby_search.py input.csv output.csv --dedup-level none
 
 ```bash
 python alma_nearby_search.py input.csv output.csv --verbose
+```
+
+```bash
+python alma_nearby_search.py input.csv output.csv --observed-species HCN
+```
+
+```bash
+python alma_nearby_search.py input.csv output.csv --cleaner
 ```
 
 ## What The Script Does
@@ -106,17 +115,26 @@ The current output CSV contains:
 - `velocity_resolution_kms`
 - `sensitivity_10kms_mjy_beam`
 - `proposal_title`
-- `Observed CO in ALMA?`
+- `Observed X in ALMA?`
 
-## Meaning Of `Observed CO in ALMA?`
+## Meaning Of `Observed X in ALMA?`
+
+The final column name depends on `--observed-species`.
+
+Examples:
+
+- default: `Observed CO in ALMA?`
+- custom: `Observed HCN in ALMA?`
 
 This flag is assigned at the source level, so all rows with the same `Name` share the same final value:
 
-- `1` if a CO line is present and at least one matching row is within `30` arcsec
-- `0.5` if no `1` exists, but a CO line is present and at least one matching row has `distance_arcsec >= 30` and `fov_arcsec > 100`
+- `1` if the selected species is present and at least one matching row is within `30` arcsec
+- `0.5` if no `1` exists, but the selected species is present and at least one matching row has `distance_arcsec >= 30` and `fov_arcsec > 100`
 - `0` otherwise
 
 If both `1` and `0.5` conditions appear for the same source, the final source-level value is `1`.
+
+For `--observed-species CO`, the matching is intentionally limited to the CO family (`12CO`, `13CO`, `C18O`, `C17O`) and does not count unrelated species such as `H2CO` or `HCO+`.
 
 ## Deduplication Options
 
@@ -133,6 +151,26 @@ Default:
 ```
 
 This helps reduce repeated rows caused by multiple spectral windows or execution blocks within the same ALMA project.
+
+## Cleaner Output Mode
+
+If you want a reduced output table, use:
+
+```bash
+python alma_nearby_search.py input.csv output.csv --cleaner
+```
+
+Rules in cleaner mode:
+
+- keep one unmatched `NaN` row when a source has no ALMA match
+- keep up to 5 closest rows containing the selected observed species for each source
+- if the selected observed species is absent, keep the single closest row for that source
+
+You can change that cap with:
+
+```bash
+python alma_nearby_search.py input.csv output.csv --cleaner --cleaner-max-observed-rows-per-name 3
+```
 
 ## Notes
 
