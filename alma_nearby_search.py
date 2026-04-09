@@ -50,6 +50,8 @@ LOGGER = logging.getLogger("alma_nearby_search")
 ALMA_TAP_URL = "https://almascience.eso.org/tap"
 DEFAULT_RADIUS_ARCMIN = 5.0
 DEFAULT_LINE_TOLERANCE_KMS = 350.0
+DEFAULT_OBSERVED_DISTANCE_THRESHOLD_ARCSEC = 30.0
+DEFAULT_OBSERVED_FOV_THRESHOLD_ARCSEC = 100.0
 ARRAY_ORDER = ("12m", "7m", "TP")
 DEFAULT_OBSERVED_SPECIES = "CO"
 INTERNAL_OBSERVED_COLUMN = "observed_species_in_alma_flag"
@@ -367,6 +369,8 @@ def compute_observed_species_flag(
     distance_arcsec: Any,
     fov_arcsec: Any,
     observed_species: Any,
+    observed_distance_threshold_arcsec: float,
+    observed_fov_threshold_arcsec: float,
 ) -> float:
     """Compute the user-facing observed-species flag."""
     if not has_observed_species_line(target_lines, observed_species):
@@ -377,7 +381,7 @@ def compute_observed_species_flag(
     except (TypeError, ValueError):
         return 0.0
 
-    if distance_value < 30.0:
+    if distance_value < observed_distance_threshold_arcsec:
         return 1.0
 
     try:
@@ -385,7 +389,10 @@ def compute_observed_species_flag(
     except (TypeError, ValueError):
         return 0.0
 
-    if distance_value >= 30.0 and fov_value > 100.0:
+    if (
+        distance_value >= observed_distance_threshold_arcsec
+        and fov_value > observed_fov_threshold_arcsec
+    ):
         return 0.5
     return 0.0
 
@@ -727,7 +734,12 @@ def blank_string_to_na(value: Any) -> Any:
     return value
 
 
-def finalize_results(df: pd.DataFrame, observed_species: Any) -> pd.DataFrame:
+def finalize_results(
+    df: pd.DataFrame,
+    observed_species: Any,
+    observed_distance_threshold_arcsec: float,
+    observed_fov_threshold_arcsec: float,
+) -> pd.DataFrame:
     """Apply final normalization and derived columns before CSV export."""
     if df.empty:
         return df.copy()
@@ -754,6 +766,8 @@ def finalize_results(df: pd.DataFrame, observed_species: Any) -> pd.DataFrame:
             distance_arcsec=row.get("distance_arcsec"),
             fov_arcsec=row.get("fov_arcsec"),
             observed_species=observed_species,
+            observed_distance_threshold_arcsec=observed_distance_threshold_arcsec,
+            observed_fov_threshold_arcsec=observed_fov_threshold_arcsec,
         ),
         axis=1,
     )
@@ -803,10 +817,21 @@ def select_cleaner_rows(
     return cleaned.drop(columns=["_distance_sort"])
 
 
-def deduplicate_results(df: pd.DataFrame, dedup_level: str, observed_species: Any) -> pd.DataFrame:
+def deduplicate_results(
+    df: pd.DataFrame,
+    dedup_level: str,
+    observed_species: Any,
+    observed_distance_threshold_arcsec: float,
+    observed_fov_threshold_arcsec: float,
+) -> pd.DataFrame:
     """Deduplicate result rows according to the requested grouping level."""
     if df.empty or dedup_level == "none":
-        return finalize_results(df, observed_species=observed_species)
+        return finalize_results(
+            df,
+            observed_species=observed_species,
+            observed_distance_threshold_arcsec=observed_distance_threshold_arcsec,
+            observed_fov_threshold_arcsec=observed_fov_threshold_arcsec,
+        )
 
     group_keys = ["Name", "ra", "dec", "project_code"]
     if dedup_level == "project_target":
@@ -845,6 +870,8 @@ def deduplicate_results(df: pd.DataFrame, dedup_level: str, observed_species: An
     return finalize_results(
         pd.DataFrame(grouped_rows, columns=INTERNAL_OUTPUT_COLUMNS),
         observed_species=observed_species,
+        observed_distance_threshold_arcsec=observed_distance_threshold_arcsec,
+        observed_fov_threshold_arcsec=observed_fov_threshold_arcsec,
     )
 
 
@@ -973,6 +1000,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=f"Species used for the final observed-in-ALMA flag and cleaner selection. Default: {DEFAULT_OBSERVED_SPECIES}",
     )
     parser.add_argument(
+        "--observed-distance-threshold-arcsec",
+        type=float,
+        default=DEFAULT_OBSERVED_DISTANCE_THRESHOLD_ARCSEC,
+        help=(
+            "Distance threshold in arcsec for assigning a value of 1 to the observed-species flag. "
+            f"Default: {DEFAULT_OBSERVED_DISTANCE_THRESHOLD_ARCSEC}"
+        ),
+    )
+    parser.add_argument(
+        "--observed-fov-threshold-arcsec",
+        type=float,
+        default=DEFAULT_OBSERVED_FOV_THRESHOLD_ARCSEC,
+        help=(
+            "FOV threshold in arcsec for assigning a value of 0.5 when outside the distance threshold. "
+            f"Default: {DEFAULT_OBSERVED_FOV_THRESHOLD_ARCSEC}"
+        ),
+    )
+    parser.add_argument(
         "--cleaner",
         action="store_true",
         help="Write a reduced output table: keep unmatched rows, up to N closest rows for the selected observed species per source, otherwise one closest row",
@@ -998,6 +1043,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if args.line_velocity_tolerance_kms < 0:
         LOGGER.error("--line-velocity-tolerance-kms must be non-negative")
+        return 1
+    if args.observed_distance_threshold_arcsec < 0:
+        LOGGER.error("--observed-distance-threshold-arcsec must be non-negative")
+        return 1
+    if args.observed_fov_threshold_arcsec < 0:
+        LOGGER.error("--observed-fov-threshold-arcsec must be non-negative")
         return 1
     if args.cleaner_max_observed_rows_per_name <= 0:
         LOGGER.error("--cleaner-max-observed-rows-per-name must be positive")
@@ -1071,6 +1122,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raw_df,
             args.dedup_level,
             observed_species=args.observed_species,
+            observed_distance_threshold_arcsec=float(args.observed_distance_threshold_arcsec),
+            observed_fov_threshold_arcsec=float(args.observed_fov_threshold_arcsec),
         )
     else:
         result_df = pd.DataFrame(columns=INTERNAL_OUTPUT_COLUMNS)

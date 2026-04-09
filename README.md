@@ -58,6 +58,7 @@ python alma_nearby_search.py input.csv output.csv
 - Deduplication level: `project_target`
 - Line velocity tolerance: `350 km/s`
 - Observed-species flag: `CO`
+- Observed-species thresholds: distance `< 30` arcsec for `1`, FOV `> 100` arcsec for `0.5`
 
 You can override them, for example:
 
@@ -79,6 +80,10 @@ python alma_nearby_search.py input.csv output.csv --observed-species HCN
 
 ```bash
 python alma_nearby_search.py input.csv output.csv --cleaner
+```
+
+```bash
+python alma_nearby_search.py input.csv output.csv --observed-species HCN --observed-distance-threshold-arcsec 20 --observed-fov-threshold-arcsec 80
 ```
 
 ## What The Script Does
@@ -128,11 +133,16 @@ Examples:
 
 This flag is assigned at the source level, so all rows with the same `Name` share the same final value:
 
-- `1` if the selected species is present and at least one matching row is within `30` arcsec
-- `0.5` if no `1` exists, but the selected species is present and at least one matching row has `distance_arcsec >= 30` and `fov_arcsec > 100`
+- `1` if the selected species is present and at least one matching row is within the distance threshold
+- `0.5` if no `1` exists, but the selected species is present and at least one matching row has `distance_arcsec` greater than or equal to the distance threshold and `fov_arcsec` greater than the FOV threshold
 - `0` otherwise
 
 If both `1` and `0.5` conditions appear for the same source, the final source-level value is `1`.
+
+Defaults:
+
+- `--observed-distance-threshold-arcsec 30`
+- `--observed-fov-threshold-arcsec 100`
 
 For `--observed-species CO`, the matching is intentionally limited to the CO family (`12CO`, `13CO`, `C18O`, `C17O`) and does not count unrelated species such as `H2CO` or `HCO+`.
 
