@@ -12,8 +12,8 @@ It is aimed at small target catalogs where you want to quickly check:
 
 This repository currently contains:
 
-- the working top-level script: `alma_nearby_search.py`
-- an initial Python package scaffold under `src/alma_search/`
+- the package implementation under `src/alma_search/`
+- a top-level compatibility launcher: `alma_nearby_search.py`
 - a packaging outline in `structure.txt`
 
 The package naming convention is:
@@ -43,11 +43,17 @@ ALMA_search/
 
 ## Installation
 
-This repo is not fully packaged for PyPI yet, so the current working setup is to install the dependencies directly:
+You can install the package locally from the repository root with:
 
 ```bash
-pip install pyvo astropy pandas
+pip install -e .
 ```
+
+This installs the package in editable mode and pulls in the runtime dependencies:
+
+- `pyvo`
+- `astropy`
+- `pandas`
 
 If you clone the repository:
 
@@ -66,15 +72,21 @@ Right now there are two practical ways to run the tool locally.
 python alma_nearby_search.py input.csv output.csv
 ```
 
-### Option 2: Run through the package scaffold
+### Option 2: Run through the package module
 
-From the repository root:
+From the repository root, without installing:
 
 ```bash
 PYTHONPATH=src python -m alma_search.cli input.csv output.csv
 ```
 
-This second form is useful while migrating the project into a proper installable package layout.
+or, after installation:
+
+```bash
+alma-search input.csv output.csv
+```
+
+This runs the package implementation directly.
 
 ## Input Formats
 

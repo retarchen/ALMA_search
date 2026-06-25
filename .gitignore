@@ -3,6 +3,7 @@
 !README.md
 !.gitignore
 !structure.txt
+!pyproject.toml
 !src/
 !src/**
 src/**/__pycache__/
