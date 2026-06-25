@@ -1,5 +1,10 @@
 Recommended PyPI-ready project structure for this package:
 
+Important naming rule:
+- Use `alma-search` for the PyPI project name and CLI command.
+- Use `alma_search` for the Python package directory and imports.
+- Do not use `alma-search` as a Python package folder name, because `-` is not valid in Python import paths.
+
 ALMA_search/
 ├── pyproject.toml
 ├── README.md
@@ -121,4 +126,3 @@ If you later want hosted docs, common choices are:
 Typical console script entry:
 
 alma-search = "alma_search.cli:main"
-

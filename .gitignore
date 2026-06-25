@@ -3,3 +3,5 @@
 !README.md
 !.gitignore
 !structure.txt
+!src/
+!src/**
