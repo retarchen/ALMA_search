@@ -1,0 +1,124 @@
+Recommended PyPI-ready project structure for this package:
+
+ALMA_search/
+├── pyproject.toml
+├── README.md
+├── LICENSE
+├── .gitignore
+├── docs/
+│   ├── index.md
+│   ├── installation.md
+│   ├── usage.md
+│   ├── api.md
+│   └── examples.md
+├── src/
+│   └── alma_search/
+│       ├── __init__.py
+│       ├── cli.py
+│       ├── search.py
+│       ├── io.py
+│       ├── lines.py
+│       └── utils.py
+├── tests/
+│   ├── test_cli.py
+│   ├── test_io.py
+│   └── test_search.py
+└── examples/
+    └── sample_targets.csv
+
+What each file/folder is for:
+
+1. pyproject.toml
+   Main packaging file for PyPI. This defines:
+   - package name on PyPI
+   - version
+   - dependencies
+   - Python version requirement
+   - console script entry point for command-line use
+
+2. README.md
+   Project description shown on GitHub and PyPI.
+
+3. LICENSE
+   Required if you want a clear open-source license.
+
+4. src/alma_search/
+   The actual Python package users will import after:
+   pip install alma-search
+
+5. docs/
+   Project documentation source files. This can later be built with tools like
+   MkDocs or Sphinx.
+
+6. docs/index.md
+   Main landing page for the documentation.
+
+7. docs/installation.md
+   Installation instructions for users.
+
+8. docs/usage.md
+   Command-line and Python usage examples.
+
+9. docs/api.md
+   API overview for package modules and functions.
+
+10. docs/examples.md
+    Worked examples with sample inputs and outputs.
+
+11. __init__.py
+   Marks the directory as a package and can expose version/info.
+
+12. cli.py
+   Command-line entry point, for example:
+   alma-search input.csv output.csv
+
+13. search.py
+   Main archive query logic and ALMA TAP search code.
+
+14. io.py
+   Input parsing and output CSV writing.
+
+15. lines.py
+   Line catalog such as CO, HCN, HCO+, etc.
+
+16. utils.py
+    Shared helper functions such as coordinate parsing and formatting.
+
+17. tests/
+    Unit tests for packaging, parsing, and search behavior.
+
+18. examples/
+    Small example input files for users.
+
+Suggested naming:
+
+- PyPI project name: alma-search
+- Import package name: alma_search
+- Command name: alma-search
+
+Minimal pyproject.toml sections you will usually want:
+
+- [build-system]
+- [project]
+- [project.optional-dependencies]
+- [project.scripts]
+- [tool.setuptools]
+- [tool.setuptools.packages.find]
+
+For documentation, a simple starter structure is:
+
+- docs/index.md
+- docs/installation.md
+- docs/usage.md
+- docs/api.md
+- docs/examples.md
+
+If you later want hosted docs, common choices are:
+
+- MkDocs for simpler Markdown-based docs
+- Sphinx for more API-heavy scientific documentation
+
+Typical console script entry:
+
+alma-search = "alma_search.cli:main"
+
