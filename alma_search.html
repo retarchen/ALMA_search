@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALMA_search · ALMA Archive Query Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --space: #0B1120;
+    --space-mid: #111827;
+    --space-light: #1A2640;
+    --steel: #8EAEC9;
+    --steel-dim: #4A6A8A;
+    --amber: #E8A94D;
+    --amber-dim: #9B6E2A;
+    --white: #F2F6FC;
+    --muted: #7A96B0;
+    --border: #1E3050;
+    --code-bg: #0D1826;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--space);
+    color: var(--white);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  /* ── CANVAS ── */
+  #starfield {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.35;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(11,17,32,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--amber);
+    letter-spacing: 0.02em;
+  }
+  .nav-brand span { color: var(--muted); }
+  .nav-links {
+    display: flex; gap: 1.8rem; list-style: none;
+  }
+  .nav-links a {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--steel); }
+
+  /* ── LAYOUT ── */
+  .page { position: relative; z-index: 1; }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 7rem 2rem 5rem;
+    max-width: 860px; margin: 0 auto;
+    text-align: center;
+  }
+  .hero-eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 1.4rem;
+    display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+  }
+  .hero-eyebrow::before, .hero-eyebrow::after {
+    content: ''; flex: 1; max-width: 60px;
+    height: 1px; background: var(--amber-dim);
+  }
+  .hero h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.8rem, 5vw, 3.2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+  }
+  .hero h1 .py { color: var(--steel); }
+  .hero h1 .cmd { color: var(--amber); }
+  .hero-desc {
+    font-size: 1.05rem;
+    color: var(--muted);
+    max-width: 580px; margin: 0 auto 2.5rem;
+    line-height: 1.8;
+  }
+  .hero-cmd {
+    display: inline-block;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    padding: 0.9rem 1.6rem;
+    border-radius: 4px;
+    color: var(--white);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .hero-cmd .prompt { color: var(--amber-dim); }
+  .hero-cmd .cmd-pip { color: var(--steel); }
+  .hero-cmd .cmd-pkg { color: var(--amber); }
+  .hero-cmd:hover { border-left-color: var(--steel); background: #0f1f38; }
+  .copied-toast {
+    position: absolute; top: -2.2rem; right: 0;
+    font-family: var(--mono); font-size: 0.7rem;
+    color: var(--amber); opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .copied-toast.show { opacity: 1; }
+
+  .hero-badges {
+    display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap;
+    margin-top: 1.8rem;
+  }
+  .badge {
+    font-family: var(--mono); font-size: 0.68rem;
+    padding: 0.25rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── SECTIONS ── */
+  .section {
+    max-width: 860px; margin: 0 auto;
+    padding: 4rem 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 0.6rem;
+  }
+  .section h2 {
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 1.2rem;
+    letter-spacing: -0.01em;
+  }
+  .section p {
+    color: var(--muted);
+    max-width: 680px;
+    margin-bottom: 1rem;
+  }
+  .section p strong { color: var(--white); font-weight: 500; }
+
+  /* ── CODE BLOCKS ── */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 1.2rem 0;
+  }
+  .code-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: #0a1524;
+  }
+  .code-lang {
+    font-family: var(--mono); font-size: 0.65rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--steel-dim);
+  }
+  .copy-btn {
+    font-family: var(--mono); font-size: 0.65rem;
+    color: var(--steel-dim); background: none;
+    border: 1px solid var(--border); border-radius: 3px;
+    padding: 0.2rem 0.6rem; cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .copy-btn:hover { color: var(--steel); border-color: var(--steel-dim); }
+  pre {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.7;
+    padding: 1.2rem 1.4rem;
+    overflow-x: auto;
+    color: var(--white);
+  }
+  .c-prompt { color: var(--amber-dim); }
+  .c-cmd { color: var(--steel); }
+  .c-arg { color: var(--white); }
+  .c-flag { color: var(--amber); }
+  .c-comment { color: var(--steel-dim); font-style: italic; }
+  .c-key { color: var(--steel); }
+  .c-val { color: #9DDBAD; }
+  .c-hdr { color: var(--amber); }
+
+  /* ── GRID ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1.2rem;
+  }
+  .card {
+    background: var(--space-light);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.3rem 1.4rem;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--steel-dim); }
+  .card-label {
+    font-family: var(--mono); font-size: 0.72rem;
+    color: var(--amber); letter-spacing: 0.06em;
+    margin-bottom: 0.4rem;
+  }
+  .card h3 {
+    font-family: var(--mono); font-size: 0.95rem;
+    font-weight: 500; color: var(--white);
+    margin-bottom: 0.5rem;
+  }
+  .card p { font-size: 0.88rem; color: var(--muted); margin: 0; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; margin: 1.2rem 0; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  th {
+    font-family: var(--mono); font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--amber); font-weight: 500;
+    text-align: left; padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--code-bg);
+  }
+  td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid #121f35;
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child {
+    font-family: var(--mono); font-size: 0.8rem;
+    color: var(--white); white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #0e1d30; }
+
+  /* ── SCORE TABLE ── */
+  .score { display: inline-block; font-family: var(--mono); font-size: 0.85rem; }
+  .score-1 { color: #7DD3A8; }
+  .score-05 { color: var(--amber); }
+  .score-0 { color: var(--steel-dim); }
+
+  /* ── LINE CATALOG ── */
+  .catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem; margin-top: 1.2rem;
+  }
+  .catalog-group {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+  }
+  .catalog-group-name {
+    font-family: var(--mono); font-size: 0.65rem;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 0.7rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .catalog-group ul { list-style: none; }
+  .catalog-group li {
+    font-family: var(--mono); font-size: 0.75rem;
+    color: var(--steel); padding: 0.15rem 0;
+    line-height: 1.5;
+  }
+
+  /* ── FLAGS ── */
+  .flag-row {
+    display: flex; gap: 1rem; margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .flag-card {
+    flex: 1; min-width: 180px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    text-align: center;
+  }
+  .flag-score {
+    font-family: var(--mono); font-size: 2rem; font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+  .flag-card p { font-size: 0.82rem; color: var(--muted); margin: 0; }
+
+  /* ── STEPS ── */
+  .steps { margin-top: 1.2rem; }
+  .step {
+    display: flex; gap: 1.2rem;
+    margin-bottom: 1.2rem;
+    align-items: flex-start;
+  }
+  .step-num {
+    font-family: var(--mono); font-size: 0.75rem;
+    font-weight: 700; color: var(--space);
+    background: var(--amber);
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 0.15rem;
+  }
+  .step-body h4 {
+    font-family: var(--mono); font-size: 0.9rem;
+    font-weight: 500; color: var(--white);
+    margin-bottom: 0.2rem;
+  }
+  .step-body p { font-size: 0.88rem; color: var(--muted); margin: 0; }
+
+  /* ── INLINE CODE ── */
+  code {
+    font-family: var(--mono); font-size: 0.82em;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    color: var(--steel);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem;
+    text-align: center;
+    font-family: var(--mono); font-size: 0.72rem;
+    color: var(--steel-dim);
+    letter-spacing: 0.04em;
+  }
+
+  @media (max-width: 600px) {
+    .nav-links { display: none; }
+    .hero { padding: 4rem 1.2rem 3rem; }
+    .section { padding: 3rem 1.2rem; }
+    .catalog-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<nav>
+  <div class="nav-brand">alma<span>_nearby_search</span><span style="color:var(--border)">·py</span></div>
+  <ul class="nav-links">
+    <li><a href="#install">Install</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#output">Output</a></li>
+    <li><a href="#dedup">Dedup</a></li>
+    <li><a href="#lines">Lines</a></li>
+  </ul>
+</nav>
+
+<div class="page">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-eyebrow">ALMA Archive Query Tool</div>
+    <h1>
+      <span class="py">alma</span><span class="cmd">_nearby_search</span><span class="py">.py</span>
+    </h1>
+    <p class="hero-desc">
+      Query the ALMA archive around a list of sky positions. Check what bands and arrays were used,
+      whether common molecular lines are covered, and export everything to CSV.
+    </p>
+    <div class="hero-cmd" id="install-hero" onclick="copyInstall(this)" title="Click to copy">
+      <span class="copied-toast" id="hero-toast">copied!</span>
+      <span class="prompt">$</span>
+      <span class="cmd-pip"> pip install</span>
+      <span class="cmd-pkg"> pyvo astropy pandas</span>
+    </div>
+    <div class="hero-badges">
+      <span class="badge">Python 3</span>
+      <span class="badge">ALMA TAP · ivoa.obscore</span>
+      <span class="badge">CSV output</span>
+      <span class="badge">CO · HCN · SiO + more</span>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="section" id="install">
+    <div class="section-label">Getting started</div>
+    <h2>Installation</h2>
+    <p>Three packages are required. Install them all at once:</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-prompt">$</span> <span class="c-cmd">pip install</span> <span class="c-arg">pyvo astropy pandas</span></pre>
+    </div>
+
+    <h2 style="margin-top:2.5rem">Input Formats</h2>
+    <p>The script accepts three input formats. Pick whichever matches your catalog.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-label">Format A</div>
+        <h3>CSV — decimal degrees</h3>
+        <p>Columns named <code>Name</code>, <code>ra_deg</code>, <code>dec_deg</code></p>
+      </div>
+      <div class="card">
+        <div class="card-label">Format B</div>
+        <h3>CSV — sexagesimal</h3>
+        <p>Columns named <code>Name</code>, <code>ra</code>, <code>dec</code></p>
+      </div>
+      <div class="card">
+        <div class="card-label">Format C</div>
+        <h3>Plain text</h3>
+        <p>One source per line: <code>NAME,HH:MM:SS.s ±DD:MM:SS</code></p>
+      </div>
+    </div>
+
+    <div class="code-block" style="margin-top:1.5rem">
+      <div class="code-header">
+        <span class="code-lang">csv · degrees</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-hdr">Name,ra_deg,dec_deg</span>
+<span class="c-arg">TargetA,83.6331,-5.3911</span>
+<span class="c-arg">TargetB,150.025,-34.433</span></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">csv · sexagesimal</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-hdr">Name,ra,dec</span>
+<span class="c-arg">TargetA,04:49:26.41,-69:12:03.77</span>
+<span class="c-arg">TargetB,05:24:15.77,-71:58:00.70</span></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">txt · plain</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-arg">J044926-691203,04:49:26.41 -69:12:03.77</span>
+<span class="c-arg">J052415-715800,05:24:15.77 -71:58:00.70</span></pre>
+    </div>
+  </section>
+
+  <!-- USAGE -->
+  <section class="section" id="usage">
+    <div class="section-label">Running the script</div>
+    <h2>Usage</h2>
+    <p>Basic invocation — input file, output file, done.</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py input.csv output.csv</span></pre>
+    </div>
+
+    <h2 style="margin-top:2.5rem">Options</h2>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">bash · examples</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-comment"># Tighten the search radius to 3 arcmin</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py</span> <span class="c-arg">in.csv out.csv</span> <span class="c-flag">--radius-arcmin 3</span>
+
+<span class="c-comment"># Disable deduplication</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py</span> <span class="c-arg">in.csv out.csv</span> <span class="c-flag">--dedup-level none</span>
+
+<span class="c-comment"># Query a different species</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py</span> <span class="c-arg">in.csv out.csv</span> <span class="c-flag">--observed-species HCN</span>
+
+<span class="c-comment"># Custom species thresholds</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py</span> <span class="c-arg">in.csv out.csv</span> <span class="c-flag">--observed-species HCN \
+  --observed-distance-threshold-arcsec 20 \
+  --observed-fov-threshold-arcsec 80</span>
+
+<span class="c-comment"># Compact output (cleaner mode)</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py</span> <span class="c-arg">in.csv out.csv</span> <span class="c-flag">--cleaner</span>
+
+<span class="c-comment"># Verbose logging</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py</span> <span class="c-arg">in.csv out.csv</span> <span class="c-flag">--verbose</span></pre>
+    </div>
+
+    <h2 style="margin-top:2.5rem">Defaults</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Parameter</th><th>Default</th><th>Override flag</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Search radius</td><td>5 arcmin</td><td><code>--radius-arcmin</code></td></tr>
+          <tr><td>Deduplication level</td><td>project_target</td><td><code>--dedup-level</code></td></tr>
+          <tr><td>Line velocity tolerance</td><td>350 km/s</td><td>—</td></tr>
+          <tr><td>Observed species</td><td>CO</td><td><code>--observed-species</code></td></tr>
+          <tr><td>Distance threshold (score = 1)</td><td>30 arcsec</td><td><code>--observed-distance-threshold-arcsec</code></td></tr>
+          <tr><td>FOV threshold (score = 0.5)</td><td>100 arcsec</td><td><code>--observed-fov-threshold-arcsec</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top:2.5rem">How it works</h2>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><h4>TAP query</h4><p>Queries <code>ivoa.obscore</code> through the ALMA TAP service for each input target within a cone search.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><h4>Separation</h4><p>Recomputes target-to-observation angular separation precisely with astropy.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><h4>Spectral parsing</h4><p>Parses ALMA spectral coverage from <code>frequency_support</code> when available.</p></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-body"><h4>Line inference</h4><p>Infers likely covered transitions using the built-in line catalog.</p></div></div>
+      <div class="step"><div class="step-num">5</div><div class="step-body"><h4>Array classification</h4><p>Tags each observation as 12m, 7m, and/or TP array.</p></div></div>
+      <div class="step"><div class="step-num">6</div><div class="step-body"><h4>Deduplication &amp; output</h4><p>Writes one row per surviving match. Sources with no nearby ALMA data still get a NaN row.</p></div></div>
+    </div>
+  </section>
+
+  <!-- OUTPUT -->
+  <section class="section" id="output">
+    <div class="section-label">Results</div>
+    <h2>Output Columns</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Column</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Name</td><td>Source name from input file</td></tr>
+          <tr><td>ra / dec</td><td>Input coordinates</td></tr>
+          <tr><td>project_code</td><td>ALMA project code</td></tr>
+          <tr><td>alma_target_name</td><td>Target name as recorded in the ALMA archive</td></tr>
+          <tr><td>alma_ra / alma_dec</td><td>ALMA pointing coordinates</td></tr>
+          <tr><td>distance_arcsec</td><td>Angular separation between input target and ALMA pointing</td></tr>
+          <tr><td>fov_arcsec</td><td>Field of view of the observation</td></tr>
+          <tr><td>observing_band</td><td>ALMA receiver band</td></tr>
+          <tr><td>telescope</td><td>Array type: 12m, 7m, and/or TP</td></tr>
+          <tr><td>target_lines</td><td>Inferred covered transitions — not detection claims</td></tr>
+          <tr><td>spectral_resolution_khz</td><td>Spectral resolution in kHz (may be comma-separated)</td></tr>
+          <tr><td>velocity_resolution_kms</td><td>Velocity resolution in km/s</td></tr>
+          <tr><td>sensitivity_10kms_mjy_beam</td><td>Sensitivity at 10 km/s in mJy/beam</td></tr>
+          <tr><td>proposal_title</td><td>ALMA proposal title</td></tr>
+          <tr><td>Observed X in ALMA?</td><td>Species detection flag: 0, 0.5, or 1 (see below)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:0.8rem; font-size:0.83rem;">Some fields may contain comma-separated values when ALMA metadata includes multiple spectral resolutions or sensitivities for the same grouped result.</p>
+
+    <h2 style="margin-top:2.5rem">The <code>Observed X in ALMA?</code> Flag</h2>
+    <p>Assigned at the source level — all rows with the same <strong>Name</strong> share the same final value. The column name follows <code>--observed-species</code> (e.g. <em>Observed HCN in ALMA?</em>).</p>
+    <div class="flag-row">
+      <div class="flag-card">
+        <div class="flag-score score-1">1</div>
+        <p>Species present <strong>and</strong> at least one row within the distance threshold</p>
+      </div>
+      <div class="flag-card">
+        <div class="flag-score score-05">0.5</div>
+        <p>Species present, no score-1 row, but FOV covers the source from farther away</p>
+      </div>
+      <div class="flag-card">
+        <div class="flag-score score-0">0</div>
+        <p>Neither condition met — no coverage for the selected species</p>
+      </div>
+    </div>
+    <p>If both 1 and 0.5 conditions exist for the same source, the final value is <strong>1</strong>.</p>
+    <p style="margin-top:0.8rem;">For <code>--observed-species CO</code>, matching is limited to the CO family (<code>12CO</code>, <code>13CO</code>, <code>C18O</code>, <code>C17O</code>). Unrelated species like H₂CO or HCO⁺ are not counted.</p>
+  </section>
+
+  <!-- DEDUP -->
+  <section class="section" id="dedup">
+    <div class="section-label">Cleaning up</div>
+    <h2>Deduplication</h2>
+    <p>Multiple spectral windows or execution blocks within one project can produce repeated rows. Use <code>--dedup-level</code> to control this.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Level</th><th>Behaviour</th></tr></thead>
+        <tbody>
+          <tr><td>none</td><td>All rows kept as-is</td></tr>
+          <tr><td>project</td><td>One row per ALMA project code per source</td></tr>
+          <tr><td>project_target <em style="color:var(--amber);font-size:0.7em">default</em></td><td>One row per project code and ALMA target name per source</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top:2.5rem">Cleaner Mode</h2>
+    <p>For a compact, publication-ready output:</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py in.csv out.csv</span> <span class="c-flag">--cleaner</span>
+
+<span class="c-comment"># Limit to 3 rows of the target species per source</span>
+<span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py in.csv out.csv</span> <span class="c-flag">--cleaner --cleaner-max-observed-rows-per-name 3</span></pre>
+    </div>
+    <p>Cleaner rules, in order:</p>
+    <ul style="color:var(--muted); padding-left:1.4rem; margin-top:0.6rem; font-size:0.88rem; line-height:2;">
+      <li>Keep one NaN row when a source has no ALMA match.</li>
+      <li>Keep up to 5 closest rows containing the selected species per source (configurable).</li>
+      <li>If the species is absent, keep the single closest row for that source.</li>
+    </ul>
+  </section>
+
+  <!-- LINES -->
+  <section class="section" id="lines">
+    <div class="section-label">Built-in catalog</div>
+    <h2>Identifiable Lines</h2>
+    <p>Lines are inferred from spectral coverage — not from detections. The catalog covers the most common extragalactic and galactic tracers.</p>
+    <div class="catalog-grid">
+      <div class="catalog-group">
+        <div class="catalog-group-name">CO Family</div>
+        <ul>
+          <li>¹²CO (1–0) through (7–6)</li>
+          <li>¹³CO (1–0) through (4–3)</li>
+          <li>C¹⁸O (1–0) through (4–3)</li>
+          <li>C¹⁷O (1–0) through (3–2)</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">Dense Gas</div>
+        <ul>
+          <li>HCN (1–0), (3–2), (4–3)</li>
+          <li>HCO⁺ (1–0), (3–2), (4–3)</li>
+          <li>HNC (1–0), (3–2), (4–3)</li>
+          <li>N₂H⁺ (1–0), (3–2)</li>
+          <li>CS (2–1), (3–2), (5–4), (7–6)</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">PDR / Diffuse Gas</div>
+        <ul>
+          <li>CN (1–0), (2–1)</li>
+          <li>CCH (1–0), (3–2)</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">Atomic Carbon</div>
+        <ul>
+          <li>[CI] ³P₁–³P₀</li>
+          <li>[CI] ³P₂–³P₁</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">Shock Tracers</div>
+        <ul>
+          <li>SiO (2–1), (5–4), (8–7)</li>
+          <li>SO (5₆–4₅), (6₅–5₄)</li>
+          <li>SO₂ (11₁,₁₁–10₀,₁₀)</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">Chemistry / Cold Gas</div>
+        <ul>
+          <li>H₂CO (3₀₃–2₀₂)</li>
+          <li>H₂CO (3₂₂–2₂₁)</li>
+          <li>H₂CO (3₂₁–2₂₀)</li>
+          <li>H₂CO (2₁₂–1₁₁)</li>
+          <li>NH₂D (1₁₁–1₀₁)</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">Star-Forming / Complex</div>
+        <ul>
+          <li>CH₃OH (5₀–4₀)</li>
+          <li>CH₃OH (2k–1k)</li>
+          <li>CH₃CN (12₀–11₀)</li>
+        </ul>
+      </div>
+      <div class="catalog-group">
+        <div class="catalog-group-name">Recombination</div>
+        <ul>
+          <li>H30α</li>
+          <li>H40α</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:1.2rem; font-size:0.82rem;">Some entries (CN, CCH, CH₃OH 2k–1k) are group-center proxies for blended or multi-component spectral complexes.</p>
+
+    <h2 style="margin-top:2.5rem">Example</h2>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">bash</span>
+        <button class="copy-btn" onclick="copyCode(this)">copy</button>
+      </div>
+      <pre><span class="c-prompt">$</span> <span class="c-cmd">python</span> <span class="c-arg">alma_nearby_search.py alma_targets_coor.txt alma_targets_all.csv</span> <span class="c-flag">--verbose</span></pre>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  alma_nearby_search · queries ivoa.obscore via ALMA TAP · archive metadata only
+</footer>
+
+<script>
+// ── STARFIELD ──
+const canvas = document.getElementById('starfield');
+const ctx = canvas.getContext('2d');
+let stars = [];
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+function initStars() {
+  stars = Array.from({ length: 200 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.2 + 0.2,
+    o: Math.random() * 0.7 + 0.1,
+    d: (Math.random() - 0.5) * 0.003
+  }));
+}
+function drawStars() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  stars.forEach(s => {
+    s.o += s.d;
+    if (s.o > 0.8 || s.o < 0.05) s.d *= -1;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(142,174,201,${s.o})`;
+    ctx.fill();
+  });
+  requestAnimationFrame(drawStars);
+}
+resize(); initStars(); drawStars();
+window.addEventListener('resize', () => { resize(); initStars(); });
+
+// ── COPY ──
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = 'copy', 1800);
+  });
+}
+function copyInstall(el) {
+  navigator.clipboard.writeText('pip install pyvo astropy pandas').then(() => {
+    const t = document.getElementById('hero-toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1600);
+  });
+}
+</script>
+</body>
+</html>
