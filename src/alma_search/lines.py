@@ -1,4 +1,9 @@
-"""Line-catalog and observed-species helpers."""
+"""Line-catalog and observed-species helpers.
+
+This module stores the small built-in spectral-line catalog used for coarse
+coverage inference and provides string-matching helpers for the final
+observed-species flag.
+"""
 
 from __future__ import annotations
 
@@ -69,28 +74,87 @@ LINE_CATALOG_GHZ: dict[str, float] = {
 
 
 def normalize_observed_species_label(species: Any) -> str:
-    """Normalize the user-facing observed-species label."""
+    """Normalize a user-supplied observed-species label.
+
+    Parameters
+    ----------
+    species : Any
+        Raw species name from CLI or API input.
+
+    Returns
+    -------
+    str
+        Cleaned species label, or the package default when the input is blank.
+    """
     text = normalize_whitespace(species)
     return text if text else DEFAULT_OBSERVED_SPECIES
 
 
 def observed_species_column_name(species: Any) -> str:
-    """Return the output column label for the observed-species flag."""
+    """Return the exported column header for the observed-species flag.
+
+    Parameters
+    ----------
+    species : Any
+        Species label selected by the user.
+
+    Returns
+    -------
+    str
+        Human-readable column title such as ``"Observed CO in ALMA?"``.
+    """
     return f"Observed {normalize_observed_species_label(species)} in ALMA?"
 
 
 def extract_line_species_token(line_name: str) -> str:
-    """Extract the species token from a line label like 'HCN(1-0)'."""
+    """Extract the species part of a line label.
+
+    Parameters
+    ----------
+    line_name : str
+        Full line label such as ``"HCN(1-0)"``.
+
+    Returns
+    -------
+    str
+        Prefix before the first ``(``, used for species comparison.
+    """
     return line_name.split("(", 1)[0].strip()
 
 
 def normalize_species_token(token: str) -> str:
-    """Normalize a species token for exact comparison."""
+    """Normalize a species token for comparison.
+
+    Parameters
+    ----------
+    token : str
+        Raw species token.
+
+    Returns
+    -------
+    str
+        Upper-case token with whitespace and square brackets removed.
+    """
     return re.sub(r"[\s\[\]]+", "", token).upper()
 
 
 def line_matches_observed_species(line_name: str, observed_species: Any) -> bool:
-    """Return True when a line label matches the selected observed-species query."""
+    """Return whether an inferred line should count for the chosen species.
+
+    Parameters
+    ----------
+    line_name : str
+        Inferred line label from the built-in catalog.
+    observed_species : Any
+        User-selected species label.
+
+    Returns
+    -------
+    bool
+        ``True`` when the line belongs to the requested species family. The
+        special query ``CO`` matches common isotopologues such as ``12CO``,
+        ``13CO``, ``C18O``, and ``C17O``.
+    """
     line_token = extract_line_species_token(line_name)
     query_token = extract_line_species_token(normalize_observed_species_label(observed_species))
     normalized_line = normalize_species_token(line_token)
@@ -103,7 +167,21 @@ def line_matches_observed_species(line_name: str, observed_species: Any) -> bool
 
 
 def has_observed_species_line(target_lines: Any, observed_species: Any) -> bool:
-    """Return True when inferred target lines include the selected observed species."""
+    """Test whether a row's inferred line list includes the chosen species.
+
+    Parameters
+    ----------
+    target_lines : Any
+        Comma-separated inferred line list.
+    observed_species : Any
+        User-selected species label.
+
+    Returns
+    -------
+    bool
+        ``True`` when at least one inferred line matches the requested
+        species.
+    """
     if is_blank(target_lines):
         return False
 

@@ -1,4 +1,9 @@
-"""ALMA archive querying and result-row construction."""
+"""ALMA archive querying and result-row construction.
+
+This module contains the logic that talks to the ALMA TAP service, interprets
+frequency metadata, infers likely spectral lines from frequency coverage, and
+translates archive rows into the package's internal output schema.
+"""
 
 from __future__ import annotations
 
@@ -27,7 +32,23 @@ ARRAY_ORDER = ("12m", "7m", "TP")
 
 
 def create_tap_service(tap_url: str = ALMA_TAP_URL) -> Any:
-    """Create the ALMA TAP service client."""
+    """Create a TAP client for the ALMA science archive.
+
+    Parameters
+    ----------
+    tap_url : str, optional
+        TAP endpoint URL. The default points to the public ALMA archive.
+
+    Returns
+    -------
+    Any
+        ``pyvo.dal.TAPService`` instance.
+
+    Raises
+    ------
+    ImportError
+        If :mod:`pyvo` is not installed in the current Python environment.
+    """
     try:
         import pyvo
     except ImportError as exc:
@@ -36,7 +57,22 @@ def create_tap_service(tap_url: str = ALMA_TAP_URL) -> Any:
 
 
 def build_adql_query(ra_deg: float, dec_deg: float, radius_deg: float) -> str:
-    """Build the ALMA ObsCore cone-search ADQL query."""
+    """Build the ADQL cone-search query used against ALMA ObsCore.
+
+    Parameters
+    ----------
+    ra_deg : float
+        Cone center right ascension in decimal degrees.
+    dec_deg : float
+        Cone center declination in decimal degrees.
+    radius_deg : float
+        Search radius in decimal degrees.
+
+    Returns
+    -------
+    str
+        ADQL query string selecting the ObsCore fields needed by this package.
+    """
     return f"""
 SELECT
     proposal_id,
@@ -72,7 +108,25 @@ def query_alma_cone(
     dec_deg: float,
     radius_arcmin: float,
 ) -> pd.DataFrame:
-    """Query ALMA ObsCore for a cone around a target position."""
+    """Query the ALMA archive around one target position.
+
+    Parameters
+    ----------
+    service : Any
+        TAP service client, typically created by :func:`create_tap_service`.
+    ra_deg : float
+        Cone center right ascension in decimal degrees.
+    dec_deg : float
+        Cone center declination in decimal degrees.
+    radius_arcmin : float
+        Cone-search radius in arcminutes.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Query results as a pandas table. Returns an empty frame when the query
+        completes successfully but finds no rows.
+    """
     radius_deg = radius_arcmin / 60.0
     adql = build_adql_query(ra_deg=ra_deg, dec_deg=dec_deg, radius_deg=radius_deg)
     LOGGER.debug("Submitting ADQL query for RA=%.6f Dec=%.6f", ra_deg, dec_deg)
@@ -88,7 +142,7 @@ def query_alma_cone(
 
 def parse_frequency_support(frequency_support: Any) -> list[tuple[float, float]]:
     """
-    Parse the ALMA frequency_support metadata string into GHz intervals.
+    Parse the ALMA ``frequency_support`` metadata field into GHz intervals.
 
     The field often contains text fragments like:
         [87.30..89.17GHz, ...]
@@ -96,7 +150,18 @@ def parse_frequency_support(frequency_support: Any) -> list[tuple[float, float]]
         230.1 .. 232.0 GHz U 234.0 .. 236.0 GHz
 
     The parser is intentionally permissive and extracts every interval that
-    looks like "number .. number unit".
+    looks like ``number .. number unit``.
+
+    Parameters
+    ----------
+    frequency_support : Any
+        Raw ObsCore ``frequency_support`` value.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        List of ``(low_ghz, high_ghz)`` intervals. The list is empty when no
+        recognizable interval is present.
     """
     if is_blank(frequency_support):
         return []
@@ -130,7 +195,21 @@ def parse_frequency_support(frequency_support: Any) -> list[tuple[float, float]]
 
 
 def coarse_frequency_interval_from_em(em_min: Any, em_max: Any) -> list[tuple[float, float]]:
-    """Convert em_min/em_max wavelength bounds in meters into a coarse GHz interval."""
+    """Convert wavelength bounds into a coarse frequency interval.
+
+    Parameters
+    ----------
+    em_min : Any
+        Minimum wavelength in meters from ObsCore.
+    em_max : Any
+        Maximum wavelength in meters from ObsCore.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Single coarse ``(low_ghz, high_ghz)`` interval, or an empty list when
+        the wavelength bounds are unavailable or invalid.
+    """
     if is_blank(em_min) or is_blank(em_max):
         return []
 
@@ -156,7 +235,29 @@ def infer_lines(
     line_velocity_tolerance_kms: float,
     line_catalog_ghz: dict[str, float] | None = None,
 ) -> str:
-    """Infer likely spectral lines from spectral coverage."""
+    """Infer likely spectral lines covered by an ALMA observation.
+
+    Parameters
+    ----------
+    frequency_support : Any
+        Raw spectral-coverage metadata string from ObsCore.
+    em_min : Any
+        Minimum wavelength in meters, used as a fallback when
+        ``frequency_support`` is absent or unparsable.
+    em_max : Any
+        Maximum wavelength in meters, used alongside ``em_min``.
+    line_velocity_tolerance_kms : float
+        Velocity tolerance used to widen the rest-frequency matching window.
+    line_catalog_ghz : dict[str, float] | None, optional
+        Optional replacement catalog mapping line labels to rest frequencies in
+        GHz.
+
+    Returns
+    -------
+    str
+        Comma-separated matched line names, or ``"Unknown"`` when no reliable
+        coverage interval could be inferred.
+    """
     catalog = line_catalog_ghz or LINE_CATALOG_GHZ
     intervals = parse_frequency_support(frequency_support)
     if not intervals:
@@ -178,12 +279,37 @@ def infer_lines(
 
 
 def classify_array(instrument_name: Any) -> str:
-    """Map ALMA metadata values onto 12m, 7m, and TP array classes."""
+    """Classify an ALMA observation using only the instrument name field.
+
+    Parameters
+    ----------
+    instrument_name : Any
+        Raw ALMA instrument metadata.
+
+    Returns
+    -------
+    str
+        Comma-separated array labels such as ``"12m"`` or ``"7m,TP"``.
+    """
     return classify_array_from_metadata(instrument_name=instrument_name, antenna_arrays="")
 
 
 def classify_array_from_metadata(instrument_name: Any, antenna_arrays: Any) -> str:
-    """Classify ALMA array usage from instrument and antenna metadata."""
+    """Classify ALMA array usage from instrument and antenna metadata.
+
+    Parameters
+    ----------
+    instrument_name : Any
+        Raw ObsCore instrument metadata.
+    antenna_arrays : Any
+        Raw antenna-array metadata, often containing antenna IDs that reveal
+        the array type.
+
+    Returns
+    -------
+    str
+        Canonical array classification assembled from the available metadata.
+    """
     instrument_text = "" if is_blank(instrument_name) else str(instrument_name).lower()
     antenna_text = "" if is_blank(antenna_arrays) else str(antenna_arrays)
     found: list[str] = []
@@ -211,7 +337,26 @@ def rows_from_query_results(
     query_df: pd.DataFrame,
     line_velocity_tolerance_kms: float,
 ) -> list[dict[str, Any]]:
-    """Transform raw query rows into output rows."""
+    """Transform raw ALMA query rows into the package's internal row schema.
+
+    Parameters
+    ----------
+    input_name : str
+        Source name from the user's input catalog.
+    input_ra_deg : float
+        Input source right ascension in decimal degrees.
+    input_dec_deg : float
+        Input source declination in decimal degrees.
+    query_df : pandas.DataFrame
+        Raw ALMA query results for this source.
+    line_velocity_tolerance_kms : float
+        Velocity tolerance passed through to :func:`infer_lines`.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        One internal output row per valid ALMA archive row.
+    """
     if query_df.empty:
         return []
 

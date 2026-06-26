@@ -1,4 +1,9 @@
-"""Command-line entry point for ALMA Nearby Search."""
+"""Command-line entry point for ALMA Search.
+
+This module turns user input files into ALMA archive queries, collects the raw
+matches, applies deduplication and cleaner-row selection, and finally writes
+the public CSV output.
+"""
 
 from __future__ import annotations
 
@@ -27,7 +32,19 @@ LOGGER = logging.getLogger("alma_nearby_search")
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments."""
+    """Parse command-line arguments for the ``alma_search`` executable.
+
+    Parameters
+    ----------
+    argv : sequence[str] | None, optional
+        Optional argument list. When ``None``, :mod:`argparse` reads from the
+        live command line.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed options and positional arguments used by :func:`main`.
+    """
     parser = argparse.ArgumentParser(
         description="Search the ALMA archive near input sky positions and export matches to CSV."
     )
@@ -96,7 +113,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Program entry point."""
+    """Execute the end-to-end ALMA search workflow.
+
+    The workflow is:
+
+    1. Parse command-line options.
+    2. Load and normalize target coordinates.
+    3. Query the ALMA TAP service once per target.
+    4. Convert raw archive rows into output rows.
+    5. Deduplicate, optionally apply the cleaner filter, and write CSV.
+
+    Parameters
+    ----------
+    argv : sequence[str] | None, optional
+        Optional command-line arguments to parse.
+
+    Returns
+    -------
+    int
+        Exit status code. ``0`` means success, ``1`` means a local validation
+        or file-processing error, and ``2`` means every remote ALMA query
+        failed so no trustworthy output could be produced.
+    """
     args = parse_args(argv)
     configure_logging(verbose=args.verbose)
 
@@ -129,6 +167,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     all_rows: list[dict[str, object]] = []
+    query_failures: list[str] = []
+    successful_queries = 0
     for target in targets.itertuples(index=False):
         LOGGER.info(
             "Searching ALMA archive for %s at RA=%.6f Dec=%.6f within %.3f arcmin",
@@ -146,15 +186,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except Exception as exc:
             LOGGER.exception("ALMA TAP query failed for target %s: %s", target.Name, exc)
-            all_rows.append(
-                build_no_match_row(
-                    input_name=str(target.Name),
-                    input_ra_deg=float(target.ra_deg),
-                    input_dec_deg=float(target.dec_deg),
-                )
-            )
+            query_failures.append(str(target.Name))
             continue
 
+        successful_queries += 1
         rows = rows_from_query_results(
             input_name=str(target.Name),
             input_ra_deg=float(target.ra_deg),
@@ -191,6 +226,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             result_df,
             observed_species=args.observed_species,
             max_observed_rows_per_name=int(args.cleaner_max_observed_rows_per_name),
+        )
+
+    if query_failures and successful_queries == 0:
+        LOGGER.error(
+            "All %d ALMA TAP queries failed. No output file was written. "
+            "This is most likely a network or ALMA TAP service problem, not a true no-match result.",
+            len(query_failures),
+        )
+        return 2
+
+    if query_failures:
+        LOGGER.warning(
+            "%d target queries failed and were omitted from the output: %s",
+            len(query_failures),
+            ", ".join(query_failures[:10]) + ("..." if len(query_failures) > 10 else ""),
         )
 
     try:

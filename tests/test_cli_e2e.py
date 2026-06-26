@@ -48,7 +48,25 @@ def test_cli_main_end_to_end_with_mocked_archive(tmp_path, monkeypatch):
     result = pd.read_csv(output_csv)
     assert list(result["Name"]) == ["TargetA"]
     assert result.loc[0, "project_code"] == "2019.1.00001.S"
-    assert result.loc[0, "Observed CO in ALMA?"] == 1.0
+    assert result.loc[0, "Observed CO in ALMA?"] == "Yes"
+
+
+def test_cli_main_returns_error_when_all_queries_fail(tmp_path, monkeypatch):
+    input_csv = tmp_path / "targets.csv"
+    output_csv = tmp_path / "results.csv"
+    input_csv.write_text("Name,ra_deg,dec_deg\nTargetA,83.6331,-5.3911\n", encoding="utf-8")
+
+    monkeypatch.setattr(cli, "create_tap_service", lambda: object())
+
+    def _raise_query_failure(**kwargs):
+        raise RuntimeError("simulated network failure")
+
+    monkeypatch.setattr(cli, "query_alma_cone", _raise_query_failure)
+
+    exit_code = cli.main([str(input_csv), str(output_csv)])
+
+    assert exit_code == 2
+    assert not output_csv.exists()
 
 
 def test_compatibility_script_end_to_end_in_subprocess(tmp_path):
@@ -138,4 +156,4 @@ class TAPService:
     assert result.returncode == 0, result.stderr
     output_df = pd.read_csv(output_csv)
     assert output_df.loc[0, "project_code"] == "2019.1.00003.S"
-    assert output_df.loc[0, "Observed CO in ALMA?"] == 1.0
+    assert output_df.loc[0, "Observed CO in ALMA?"] == "Yes"

@@ -9,8 +9,14 @@
 !src/**
 !tests/
 !tests/**
+!docs/
+!docs/**
+!examples/
+!examples/**
+!.readthedocs.yaml
 src/**/__pycache__/
 src/**/*.pyc
 src/*.egg-info/
 tests/**/__pycache__/
 tests/**/*.pyc
+docs/_build/

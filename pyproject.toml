@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "alma-search"
+name = "alma_search"
 version = "0.1.0"
 description = "Search the ALMA archive around input sky positions and export nearby observations to CSV."
 readme = "README.md"
@@ -11,7 +11,8 @@ requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-  { name = "Hongxing Chen" }
+  { name = "Hongxing Chen", email = "retarchx@icloud.com" },
+  { name = "Joyeeta Kundu Aishi", email = "joyeetaishi.kundu@gmail.com" }
 ]
 keywords = ["astronomy", "ALMA", "archive", "radio astronomy", "TAP"]
 classifiers = [
@@ -42,7 +43,7 @@ dev = [
 ]
 
 [project.scripts]
-alma-search = "alma_search.cli:main"
+alma_search = "alma_search.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

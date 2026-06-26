@@ -1,4 +1,9 @@
-"""Input parsing and output-table helpers."""
+"""Input parsing and output-table helpers.
+
+This module is responsible for normalizing user-supplied target catalogs,
+combining and cleaning intermediate result rows, computing the final
+observed-species flag, and writing the canonical CSV schema.
+"""
 
 from __future__ import annotations
 
@@ -51,7 +56,19 @@ INTERNAL_OUTPUT_COLUMNS = [
 
 
 def get_output_columns(species: Any) -> list[str]:
-    """Return the public output-column order for the selected observed species."""
+    """Return the exported column order for a specific observed-species label.
+
+    Parameters
+    ----------
+    species : Any
+        User-supplied species name, for example ``"CO"`` or ``"HCN"``.
+
+    Returns
+    -------
+    list[str]
+        Public CSV columns in the exact order used for export, with the final
+        internal flag column renamed to the user-facing label.
+    """
     return [
         observed_species_column_name(species) if column == INTERNAL_OBSERVED_COLUMN else column
         for column in INTERNAL_OUTPUT_COLUMNS
@@ -66,7 +83,38 @@ def compute_observed_species_flag(
     observed_distance_threshold_arcsec: float,
     observed_fov_threshold_arcsec: float,
 ) -> float:
-    """Compute the user-facing observed-species flag."""
+    """Compute the internal observed-species score for one result row.
+
+    The internal score is later converted to a simple ``Yes`` or ``No`` in the
+    exported CSV. A positive value means the selected species is considered
+    observed for that source. The score values are:
+
+    - ``1.0`` when the inferred line is present and the ALMA pointing is within
+      the distance threshold.
+    - ``0.5`` when the inferred line is present, the pointing is farther away,
+      but the field of view is large enough to still count as coverage.
+    - ``0.0`` otherwise.
+
+    Parameters
+    ----------
+    target_lines : Any
+        Comma-separated inferred line names for the row.
+    distance_arcsec : Any
+        Angular separation between the input target and ALMA pointing center.
+    fov_arcsec : Any
+        Approximate ALMA field of view in arcseconds.
+    observed_species : Any
+        Species to test, such as ``"CO"`` or ``"HCN"``.
+    observed_distance_threshold_arcsec : float
+        Distance threshold for a definite match.
+    observed_fov_threshold_arcsec : float
+        FOV threshold for the looser coverage case.
+
+    Returns
+    -------
+    float
+        Internal score used during post-processing.
+    """
     if not has_observed_species_line(target_lines, observed_species):
         return 0.0
 
@@ -91,8 +139,43 @@ def compute_observed_species_flag(
     return 0.0
 
 
+def observed_species_flag_to_label(value: Any) -> str:
+    """Convert an internal observed-species score into a CSV label.
+
+    Parameters
+    ----------
+    value : Any
+        Numeric score produced by :func:`compute_observed_species_flag`.
+
+    Returns
+    -------
+    str
+        ``"Yes"`` when the score is greater than zero, otherwise ``"No"``.
+    """
+    try:
+        return "Yes" if float(value) > 0 else "No"
+    except (TypeError, ValueError):
+        return "No"
+
+
 def build_no_match_row(input_name: str, input_ra_deg: float, input_dec_deg: float) -> dict[str, Any]:
-    """Create a placeholder output row for targets with no ALMA matches."""
+    """Create a placeholder row for a target with no returned ALMA matches.
+
+    Parameters
+    ----------
+    input_name : str
+        Original target name from the input catalog.
+    input_ra_deg : float
+        Input right ascension in decimal degrees.
+    input_dec_deg : float
+        Input declination in decimal degrees.
+
+    Returns
+    -------
+    dict[str, Any]
+        Output row with coordinate fields filled and science metadata set to
+        missing values.
+    """
     ra_text, dec_text = format_ra_dec_strings(input_ra_deg, input_dec_deg)
     return {
         "Name": input_name,
@@ -116,7 +199,29 @@ def build_no_match_row(input_name: str, input_ra_deg: float, input_dec_deg: floa
 
 
 def load_targets_from_table(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize supported tabular target inputs into Name, ra_deg, dec_deg."""
+    """Normalize a tabular input catalog into ``Name``, ``ra_deg``, ``dec_deg``.
+
+    Supported schemas are:
+
+    - ``Name, ra_deg, dec_deg`` for decimal-degree coordinates.
+    - ``Name, ra, dec`` for sexagesimal or decimal text coordinates.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Raw table read from a CSV-like input file.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Normalized target table with decimal-degree coordinates.
+
+    Raises
+    ------
+    ValueError
+        If the required columns are missing or any coordinate row cannot be
+        parsed.
+    """
     columns = {str(col): col for col in df.columns}
     required_degree = {"Name", "ra_deg", "dec_deg"}
     if required_degree.issubset(columns):
@@ -152,7 +257,27 @@ def load_targets_from_table(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_targets_from_text(path: str) -> pd.DataFrame:
-    """Load targets from a plain-text file with lines like 'Name,RA DEC'."""
+    """Load targets from a plain-text coordinate list.
+
+    Each non-comment line must have the form ``Name,RA DEC`` where the
+    coordinate tokens can be decimal degrees or sexagesimal text.
+
+    Parameters
+    ----------
+    path : str
+        Path to the plain-text input file.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Normalized target table with columns ``Name``, ``ra_deg``, and
+        ``dec_deg``.
+
+    Raises
+    ------
+    ValueError
+        If any line cannot be parsed into a valid name and coordinate pair.
+    """
     normalized_rows: list[dict[str, Any]] = []
     with open(path, "r", encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
@@ -190,7 +315,23 @@ def load_targets_from_text(path: str) -> pd.DataFrame:
 
 
 def load_targets(path: str, logger: Any | None = None) -> pd.DataFrame:
-    """Load supported target files and normalize coordinates into degrees."""
+    """Load a target catalog from CSV-like or plain-text input.
+
+    The function first attempts structured CSV parsing. If that fails, it falls
+    back to the plain-text parser used for line-based coordinate lists.
+
+    Parameters
+    ----------
+    path : str
+        Input file path.
+    logger : Any | None, optional
+        Optional logger used to report fallback decisions.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Normalized target catalog in decimal degrees.
+    """
     input_path = Path(path)
 
     try:
@@ -207,7 +348,19 @@ def load_targets(path: str, logger: Any | None = None) -> pd.DataFrame:
 
 
 def combine_arrays(values: Sequence[str]) -> str:
-    """Combine multiple classified array values in stable order."""
+    """Combine classified array labels into the canonical order.
+
+    Parameters
+    ----------
+    values : sequence[str]
+        Array classifications such as ``"12m"``, ``"7m"``, or comma-separated
+        combinations from multiple rows.
+
+    Returns
+    -------
+    str
+        Unique array labels joined in ``12m,7m,TP`` order.
+    """
     flattened: list[str] = []
     for value in values:
         if is_blank(value):
@@ -219,7 +372,19 @@ def combine_arrays(values: Sequence[str]) -> str:
 
 
 def combine_bands(values: Sequence[Any]) -> str:
-    """Combine band_list values into a unique sorted comma-separated string."""
+    """Combine ALMA band metadata into a sorted comma-separated string.
+
+    Parameters
+    ----------
+    values : sequence[Any]
+        Raw ``band_list`` field values, potentially containing repeated values
+        or multiple delimiters.
+
+    Returns
+    -------
+    str
+        Unique bands sorted numerically when possible.
+    """
     tokens: list[str] = []
     for value in values:
         if is_blank(value):
@@ -232,7 +397,21 @@ def combine_bands(values: Sequence[Any]) -> str:
 
 
 def combine_lines(values: Sequence[str]) -> str:
-    """Combine matched line lists into a unique comma-separated string."""
+    """Combine inferred line labels from multiple rows.
+
+    Parameters
+    ----------
+    values : sequence[str]
+        Comma-separated line lists, often from multiple observations being
+        merged into one output row.
+
+    Returns
+    -------
+    str
+        Unique line names in first-seen order. Returns ``"Unknown"`` only when
+        no explicit line name is available but at least one source row was
+        marked as unknown.
+    """
     items: list[str] = []
     unknown_seen = False
     for value in values:
@@ -254,7 +433,18 @@ def combine_lines(values: Sequence[str]) -> str:
 
 
 def blank_string_to_na(value: Any) -> Any:
-    """Convert blank strings to pandas NA while preserving non-blank values."""
+    """Convert blank strings to :data:`pandas.NA`.
+
+    Parameters
+    ----------
+    value : Any
+        Scalar value to normalize.
+
+    Returns
+    -------
+    Any
+        ``pandas.NA`` for empty strings, otherwise the original value.
+    """
     if isinstance(value, str) and not value.strip():
         return pd.NA
     return value
@@ -266,7 +456,26 @@ def finalize_results(
     observed_distance_threshold_arcsec: float = DEFAULT_OBSERVED_DISTANCE_THRESHOLD_ARCSEC,
     observed_fov_threshold_arcsec: float = DEFAULT_OBSERVED_FOV_THRESHOLD_ARCSEC,
 ) -> pd.DataFrame:
-    """Apply final normalization and derived columns before CSV export."""
+    """Apply final cleanup and derive the observed-species flag column.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Intermediate result table using the internal schema.
+    observed_species : Any, optional
+        Species used for the final observed-in-ALMA decision.
+    observed_distance_threshold_arcsec : float, optional
+        Distance threshold for a definite observed flag.
+    observed_fov_threshold_arcsec : float, optional
+        FOV threshold for the looser observed flag.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Cleaned result table with normalized missing values and a groupwise
+        observed-species score propagated across rows with the same source
+        ``Name``.
+    """
     if df.empty:
         return df.copy()
 
@@ -307,12 +516,28 @@ def select_cleaner_rows(
     max_observed_rows_per_name: int = 5,
 ) -> pd.DataFrame:
     """
-    Reduce the final table to a cleaner subset.
+    Reduce the final table to a smaller human-review subset.
 
-    Rules:
-    - keep one unmatched row when a source has no ALMA match
-    - keep up to ``max_observed_rows_per_name`` closest rows when the selected observed species exists
-    - otherwise keep the single closest row for that source
+    Rules
+    -----
+    - Keep one unmatched row when a source has no ALMA match.
+    - Keep up to ``max_observed_rows_per_name`` closest rows when the selected
+      observed species exists.
+    - Otherwise keep the single closest row for that source.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Finalized result table.
+    observed_species : Any, optional
+        Species used to decide whether a source has relevant rows.
+    max_observed_rows_per_name : int, optional
+        Maximum number of closest species-matching rows to keep per source.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered table sorted by source name and distance.
     """
     if df.empty:
         return df.copy()
@@ -350,7 +575,32 @@ def deduplicate_results(
     observed_distance_threshold_arcsec: float = DEFAULT_OBSERVED_DISTANCE_THRESHOLD_ARCSEC,
     observed_fov_threshold_arcsec: float = DEFAULT_OBSERVED_FOV_THRESHOLD_ARCSEC,
 ) -> pd.DataFrame:
-    """Deduplicate result rows according to the requested grouping level."""
+    """Deduplicate raw result rows before final export.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Raw per-observation result rows in the internal schema.
+    dedup_level : str
+        Deduplication mode. Supported values are ``"none"``, ``"project"``,
+        and ``"project_target"``.
+    observed_species : Any, optional
+        Species used for the final observed-species flag.
+    observed_distance_threshold_arcsec : float, optional
+        Distance threshold for a definite observed flag.
+    observed_fov_threshold_arcsec : float, optional
+        FOV threshold for the looser observed flag.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Deduplicated and finalized output rows.
+
+    Raises
+    ------
+    ValueError
+        If ``dedup_level`` is not one of the supported values.
+    """
     if df.empty or dedup_level == "none":
         return finalize_results(
             df,
@@ -401,13 +651,24 @@ def deduplicate_results(
 
 
 def write_csv(df: pd.DataFrame, path: str, observed_species: Any = DEFAULT_OBSERVED_SPECIES) -> None:
-    """Write results to CSV with the canonical column order."""
+    """Write the public CSV output file.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Final result table in the internal schema.
+    path : str
+        Destination CSV file path.
+    observed_species : Any, optional
+        Species name used to label the final ``Observed ... in ALMA?`` column.
+    """
     output = df.copy()
     for column in INTERNAL_OUTPUT_COLUMNS:
         if column not in output.columns:
             output[column] = pd.NA
 
     output = output.loc[:, INTERNAL_OUTPUT_COLUMNS]
+    output[INTERNAL_OBSERVED_COLUMN] = output[INTERNAL_OBSERVED_COLUMN].map(observed_species_flag_to_label)
     output = output.rename(columns={INTERNAL_OBSERVED_COLUMN: observed_species_column_name(observed_species)})
     output["_distance_sort"] = pd.to_numeric(output["distance_arcsec"], errors="coerce")
     output = output.sort_values(by=["Name", "_distance_sort"], ascending=[True, True], kind="stable", na_position="last")
