@@ -4,7 +4,13 @@
 !.gitignore
 !structure.txt
 !pyproject.toml
+!LICENSE
 !src/
 !src/**
+!tests/
+!tests/**
 src/**/__pycache__/
 src/**/*.pyc
+src/*.egg-info/
+tests/**/__pycache__/
+tests/**/*.pyc

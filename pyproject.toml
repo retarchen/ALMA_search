@@ -8,11 +8,33 @@ version = "0.1.0"
 description = "Search the ALMA archive around input sky positions and export nearby observations to CSV."
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Hongxing Chen" }
+]
+keywords = ["astronomy", "ALMA", "archive", "radio astronomy", "TAP"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
 dependencies = [
   "astropy>=5.0",
   "pandas>=2.0",
   "pyvo>=1.4"
 ]
+
+[project.urls]
+Homepage = "https://github.com/retarchen/ALMA_search"
+Repository = "https://github.com/retarchen/ALMA_search"
+Issues = "https://github.com/retarchen/ALMA_search/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -27,3 +49,6 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
