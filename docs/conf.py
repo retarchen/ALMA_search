@@ -10,7 +10,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 project = "ALMA Search"
 author = "Hongxing Chen, Joyeeta Kundu Aishi"
-release = "0.1.1"
+release = "0.1.2"
 
 extensions = [
     "sphinx.ext.autodoc",

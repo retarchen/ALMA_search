@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alma_search"
-version = "0.1.1"
+version = "0.1.2"
 description = "Search the ALMA archive around input sky positions and export nearby observations to CSV."
 readme = "README.md"
 requires-python = ">=3.10"
